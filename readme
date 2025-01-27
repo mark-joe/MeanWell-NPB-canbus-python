@@ -1,15 +1,15 @@
 just some notes:
 
-MeanWell NPB (-1700-48) for my DIY 
-home battery to be steered by CAN-BUS. 
+MeanWell NPB (-1700-48) for my DIY home battery to be steered by CAN-BUS. 
 COMMANDS HAVE TO BE SENT WITH SWAPPED LOW AND HIGH BYTES, thus reading from the manual e.g. set system_config 
-(0x00c2), you have to sent 0xc2, 0x00. I know, it is in the manual, but 
-I guess many of us are first time CAN-BUS users.
+(0x00c2), you have to sent 0xc2, 0x00. I know, it is in the manual, but I guess many of us are first time CAN-BUS users.
 
 I could write 0x03, 0x04 to 0xc2, 0x00 and the value of 4 (the famous 
 bit 10) was sustained after power up, indicating it has the disabled 
-EEPROM write function. 
+EEPROM write function! 
 
+When in use as charger change B0, B1, B2, ... V and I out_set are for PSU usage 
+I guess. Fields 60 and 61 work.
 (using raspberry pi 3B+ (lan),  Waveshare 2-CH-CAN-Hat, NPB-1700-48 as 
 charger and OpenDTU together with Hoymiles HMS-500 as inverters)
 
@@ -67,13 +67,19 @@ def MEANWELL_dump(bus, fields = [0xb0, 0xb1, 0xb2, 0xb3, 0xb9, 0x60, 0x61]):
 ▸   ▸   except can.CanError:
 ▸   ▸   ▸   print("Message NOT sent")
 
+MEANWELL_LAST_SET_VALUE = -1
+MEANWELL_AVG_SET_N = 5
+MEANWELL_AVG_SET_VALUE = []
+
+def MEANWELL_set_value(bus, value):  # value = Watt's to burn
+▸   global MEANWELL_LAST_SET_VALUE, MEANWELL_AVG_SET_N, MEANWELL_AVG_SET_VALUE
 ▸   print("MEANWELL set value", value)
 ▸   if value < 0:
 ▸   ▸   print("MEANWELL_set_value negative", value)
 ▸   ▸   MEANWELL_off(bus)
 ▸   ▸   value = 0
 ▸   ▸   return 0
-▸   if value > (56 * 25): value = 56 * 25
+▸   if value > (56 * 25): value = 56 * 25  # i do the calculations at 56 volt
 ▸   MEANWELL_AVG_SET_VALUE.append(value)
 ▸   if len(MEANWELL_AVG_SET_VALUE) > MEANWELL_AVG_SET_N:
 ▸   ▸   MEANWELL_AVG_SET_VALUE.pop(0)
@@ -93,9 +99,9 @@ def MEANWELL_dump(bus, fields = [0xb0, 0xb1, 0xb2, 0xb3, 0xb9, 0x60, 0x61]):
 
 ▸   msg = can.Message(arbitration_id=0xc0103, data=[0xb0, 0x00,  low, high], is_extended_id=True)
 ▸   MEANWELL_off(bus)
-▸   time.sleep(0.1)
+▸   time.sleep(0.1)  #  I do not like these, but if ommited it does work well
 ▸   bus.send(msg)
-▸   time.sleep(0.1)
+▸   time.sleep(0.1) #  I do not like these, but if ommited it does work well
 ▸   MEANWELL_on(bus)
 ▸   time.sleep(15)
 ▸   return (value)
