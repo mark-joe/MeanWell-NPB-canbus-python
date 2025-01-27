@@ -8,13 +8,20 @@ I could write 0x03, 0x04 to 0xc2, 0x00 and the value of 4 (the famous
 bit 10) was sustained after power up, indicating it has the disabled 
 EEPROM write function! 
 
-When in use as charger change B0, B1, B2, ... V and I out_set are for PSU usage 
-I guess. Fields 60 and 61 work.
+When in use as charger change B0, B1, B2, ... 
+V and I out_set are for PSU usage I guess. Fields 60 and 61 do work.
 (using raspberry pi 3B+ (lan),  Waveshare 2-CH-CAN-Hat, NPB-1700-48 as 
 charger and OpenDTU together with Hoymiles HMS-500 as inverters)
+Claiming 1700 Watt is also somewhat optimistic: Max amp = 25, thus
+1700/25=68V. E.g. LiFePO4, ABSOLUTE MAXIMUM voltage: 3.65, 
+times 16 cells = 58.4V. Times 25A = 1460 Watt max. In practice voltage
+will be even lower, e.g. 56V -> 1400 Watt. Where is the rest of the promised
+1700 Watt?
 
-And, oh yeah, the search term for the connector on the MeanWell NPB: JST 
-PHDR-14VS
+And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14VS (I bought these: 
+https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
+You get 5 pieces with connectors on both sites, enough to connect 10 chargers!
+
 
 /boot/firmware/config.txt
 dtparam=spi=on
