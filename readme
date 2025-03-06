@@ -19,6 +19,7 @@ Claiming 1700 Watt is somewhat optimistic: Max amp = 25, thus
 times 16 cells = 58.4V. Times 25A = 1460 Watt max. In practice voltage
 will be even lower, e.g. 56V -> 1400 Watt. Where is the rest of the promised
 1700 Watt?
+Minimal value (for me) is 5A, max 25A.
 
 And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14VS (I bought these: 
 https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
