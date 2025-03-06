@@ -30,8 +30,7 @@ And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14
 https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
 You get 5 pieces with connectors on both sites, enough to connect 10 chargers!
 
-
-/boot/firmware/config.txt
+/boot/firmware/config.txt  
 dtparam=spi=on
 dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=25
 dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=23
