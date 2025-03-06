@@ -11,7 +11,7 @@ bit 10) was sustained after power up, indicating it has the disabled
 EEPROM write function! 
 
 When in use as charger change B0, B1, B2, ... 
-V and I out_set are for PSU usage!  Fields 60 and 61 READ_VOUT and READ_IOUT do work, also in charger mode.
+V and I out_set are for **PSU usage**!  Fields 60 and 61 (READ_VOUT and READ_IOUT) do work, also in charger mode.
 (using raspberry pi 3B+ (lan),  Waveshare 2-CH-CAN-Hat, NPB-1700-48 as 
 charger and OpenDTU together with Hoymiles HMS-500 as inverters)
 
