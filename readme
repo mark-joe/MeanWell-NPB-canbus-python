@@ -14,12 +14,14 @@ When in use as charger change B0, B1, B2, ...
 V and I out_set are for PSU usage!  Fields 60 and 61 READ_VOUT and READ_IOUT do work, also in charger mode.
 (using raspberry pi 3B+ (lan),  Waveshare 2-CH-CAN-Hat, NPB-1700-48 as 
 charger and OpenDTU together with Hoymiles HMS-500 as inverters)
+
 Claiming 1700 Watt is somewhat optimistic: Max amp = 25, thus
 1700/25=68V. E.g. LiFePO4, ABSOLUTE MAXIMUM voltage: 3.65, 
 times 16 cells = 58.4V. Times 25A = 1460 Watt max. In practice voltage
 will be even lower, e.g. 56V -> 1400 Watt. Where is the rest of the promised
 1700 Watt?
-Minimal value (for me) is 5A, max 25A.
+Minimal value (for me) is 5A, max 25A (CURVE_CC)
+Choose the CURVE_CV to your liking, I use 55.5V, 3.47 per cell.
 
 And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14VS (I bought these: 
 https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
