@@ -4,7 +4,7 @@ MeanWell NPB (NPB-1700-48) for my DIY home battery to be steered by CAN-BUS.
 **COMMANDS HAVE TO BE SENT WITH SWAPPED LOW AND HIGH BYTES**, thus reading from the manual e.g. set system_config 
 (0x00c2), you have to sent 0xc2, 0x00. I know, it is in the manual, but I guess many of us are first time CAN-BUS users.
 
-FROM THE MANUAL (mine: 6 4.3 Practical Operation of Communication) Add 120 terminal resistor to both the controller and the NPB 
+FROM THE MANUAL (mine: 6 4.3 Practical Operation of Communication) **Add 120 terminal resistor to both the controller and the NPB** 
 
 I could write 0x03, 0x04 to 0xc2, 0x00 and the value of 4 (the famous 
 bit 10) was sustained after power up, indicating it has the disabled 
@@ -23,8 +23,8 @@ will be even lower, e.g. 56V -> 1400 Watt. Where is the rest of the promised
 Minimal value (for me) is 5A, max 25A (CURVE_CC)
 Choose the CURVE_CV to your liking, I use 55.5V, 3.47 per cell.
 
-Note from the manual: 2. The setting of charging related parameters requires re AC
-power on, remote on/off, or communication operation on/off before it can take effect, not immediately.
+Note from the manual: 2. **The setting of charging related parameters requires AC
+power on, remote on/off, or communication operation on/off before it can take effect, not immediately.**
 
 And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14VS (I bought these: 
 https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
