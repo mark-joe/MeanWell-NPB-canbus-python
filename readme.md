@@ -36,7 +36,7 @@ dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=25
 dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=23
 dtoverlay=spi-bcm2835-overlay
 
-/etc/network/interfaces.d/can
+/etc/network/interfaces.d/can  
 auto can0
 auto can1
 iface can0 inet manual
@@ -48,9 +48,9 @@ up /sbin/ifconfig can1 up
 down /sbin/ifconfig can0 down
 down /sbin/ifconfig can1 down
 
-sudo apt install python3-can
+sudo apt install python3-can  
 
-import can
+import can  
 can.rc['interface'] = 'socketcan'
 can.rc['channel'] = 'can0'
 canbus_charger = can.Bus()
@@ -58,16 +58,16 @@ MEANWELL_off(canbus_charger)
 LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, 1000)
 
 
-def MEANWELL_off(bus):
+def MEANWELL_off(bus):  
 ▸   msg = can.Message(arbitration_id=0xc0103, data=[0x00, 0x00, 0x00], is_extended_id=True)
 ▸   bus.send(msg)
 def MEANWELL_on(bus):
 ▸   msg = can.Message(arbitration_id=0xc0103, data=[0x00, 0x00, 0x01], is_extended_id=True)
 ▸   bus.send(msg)
 
-def MEANWELL_dump(bus, fields = [0xb0, 0xb1, 0xb2, 0xb3, 0xb9, 0x60, 0x61]):
+def MEANWELL_dump(bus, fields = [0xb0, 0xb1, 0xb2, 0xb3, 0xb9, 0x60, 0x61]):  
 
-▸   for field in fields:
+▸   for field in fields:  
 ▸   ▸   print("==============", "FIELD %02x" % field)
 ▸   ▸   msg = can.Message(arbitration_id=0xc0103, data=[field, 0x00], is_extended_id=True)
 ▸   ▸   print(msg)
@@ -81,7 +81,7 @@ def MEANWELL_dump(bus, fields = [0xb0, 0xb1, 0xb2, 0xb3, 0xb9, 0x60, 0x61]):
 ▸   ▸   except can.CanError:
 ▸   ▸   ▸   print("Message NOT sent")
 
-MEANWELL_LAST_SET_VALUE = -1
+MEANWELL_LAST_SET_VALUE = -1  
 MEANWELL_AVG_SET_N = 5
 MEANWELL_AVG_SET_VALUE = []
 
