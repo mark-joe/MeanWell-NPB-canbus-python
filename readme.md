@@ -1,11 +1,11 @@
 just some notes:
-DIY Battery with MeanWell NPB (NPB-1700-48) charger, Hoymiles HMS-500 as inverters, and JK B2A20S20PR-HC BMS, and 16 EVE 280Ah cells.
+DIY Battery with MeanWell NPB (NPB-1700-48) charger, two Hoymiles HMS-500 as inverters, and JK B2A20S20PR-HC BMS, and 16 EVE 280Ah cells.
  
 MeanWell NPB (NPB-1700-48) for my DIY home battery to be steered by CAN-BUS. 
 **COMMANDS HAVE TO BE SENT WITH SWAPPED LOW AND HIGH BYTES**, thus reading from the manual e.g. set system_config 
 (0x00c2), you have to sent 0xc2, 0x00. I know, it is in the manual, but I guess many of us are first time CAN-BUS users.
 
-FROM THE MANUAL (mine: 6 4.3 Practical Operation of Communication) **Add 120 terminal resistor to both the controller and the NPB** 
+FROM THE MANUAL (mine: 6 4.3 Practical Operation of Communication) **Add 120 Ohm terminating resistor to both the controller and the NPB** 
 
 I could write 0x03, 0x04 to 0xc2, 0x00 and the value of 4 (the famous 
 bit 10) was sustained after power up, indicating it has the disabled 
