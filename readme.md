@@ -30,6 +30,8 @@ And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14
 https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
 You get 5 pieces with connectors on both sites, enough to connect 10 chargers!
 
+**Raspberry settings**
+
 /boot/firmware/config.txt  
 dtparam=spi=on
 dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=25
@@ -49,76 +51,6 @@ down /sbin/ifconfig can0 down
 down /sbin/ifconfig can1 down
 
 sudo apt install python3-can  
-
-import can  
-can.rc['interface'] = 'socketcan'
-can.rc['channel'] = 'can0'
-canbus_charger = can.Bus()
-MEANWELL_off(canbus_charger)
-LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, 1000)
-
-
-def MEANWELL_off(bus):  
-▸   msg = can.Message(arbitration_id=0xc0103, data=[0x00, 0x00, 0x00], is_extended_id=True)
-▸   bus.send(msg)
-def MEANWELL_on(bus):
-▸   msg = can.Message(arbitration_id=0xc0103, data=[0x00, 0x00, 0x01], is_extended_id=True)
-▸   bus.send(msg)
-
-def MEANWELL_dump(bus, fields = [0xb0, 0xb1, 0xb2, 0xb3, 0xb9, 0x60, 0x61]):  
-
-▸   for field in fields:  
-▸   ▸   print("==============", "FIELD %02x" % field)
-▸   ▸   msg = can.Message(arbitration_id=0xc0103, data=[field, 0x00], is_extended_id=True)
-▸   ▸   print(msg)
-▸   ▸   try:
-▸   ▸   ▸   bus.send(msg)
-▸   ▸   ▸   ans = bus.recv(1)
-▸   ▸   ▸   print(ans)
-▸   ▸   ▸   out = float(ans.data[2]) * 0.01 + float(ans.data[3]) * 0.01 * 256.0
-▸   ▸   ▸   print("FIELD %02x" % field, out)
-▸   ▸   ▸   print("==============")
-▸   ▸   except can.CanError:
-▸   ▸   ▸   print("Message NOT sent")
-
-MEANWELL_LAST_SET_VALUE = -1  
-MEANWELL_AVG_SET_N = 5
-MEANWELL_AVG_SET_VALUE = []
-
-def MEANWELL_set_value(bus, value):  # value = Watt's to burn
-▸   global MEANWELL_LAST_SET_VALUE, MEANWELL_AVG_SET_N, MEANWELL_AVG_SET_VALUE
-▸   print("MEANWELL set value", value)
-▸   if value < 0:
-▸   ▸   print("MEANWELL_set_value negative", value)
-▸   ▸   MEANWELL_off(bus)
-▸   ▸   value = 0
-▸   ▸   return 0
-▸   if value > (56 * 25): value = 56 * 25  # i do the calculations at 56 volt
-▸   MEANWELL_AVG_SET_VALUE.append(value)
-▸   if len(MEANWELL_AVG_SET_VALUE) > MEANWELL_AVG_SET_N:
-▸   ▸   MEANWELL_AVG_SET_VALUE.pop(0)
-▸   value = min(MEANWELL_AVG_SET_VALUE)
-▸   print("MEANWELL calculated set value", value)
-
-▸   if value == MEANWELL_LAST_SET_VALUE:
-▸   ▸   print("MEANWELL already at that setting, leaving as is")
-▸   ▸   time.sleep(15)
-▸   ▸   return (value)
-▸   MEANWELL_LAST_SET_VALUE = value
-▸   A = value / 56.0
-▸   print("Amps:", A)
-▸   A100 = int(A * 100)
-▸   high = A100 // 256
-▸   low = A100 % 256
-
-▸   msg = can.Message(arbitration_id=0xc0103, data=[0xb0, 0x00,  low, high], is_extended_id=True)
-▸   MEANWELL_off(bus)
-▸   time.sleep(0.1)  #  I do not like these, but if ommited it does work well
-▸   bus.send(msg)
-▸   time.sleep(0.1) #  I do not like these, but if ommited it does work well
-▸   MEANWELL_on(bus)
-▸   time.sleep(15)
-▸   return (value)
 
 
 
