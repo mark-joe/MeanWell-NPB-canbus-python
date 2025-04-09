@@ -1,0 +1,333 @@
+#!/usr/bin/env python 
+import paho.mqtt.client as mqtt
+import time
+import json
+import random
+import can
+import argparse
+from suntime import Sun, SunTimeException
+
+from battery_config import *
+from battery_utils import *
+
+import signal
+import sys
+import os
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--verbose', '-v', action='store_true')
+parser.add_argument('--charge', action='store_true')
+parser.add_argument('--force', action='store_true')
+parser.add_argument('--discharge', action='store_true')
+parser.add_argument('--sun', action='store_true')
+parser.add_argument('--quiet','-q', action='store_true')
+parser.add_argument('--safe', action='store_true')
+args = parser.parse_args()
+if args.charge and args.discharge:
+	print("Choose one function")
+	exit(0)
+if not args.charge and not args.discharge and not args.sun:
+	print("Choose one function")
+	exit(0)
+VERBOSE = args.verbose
+
+mqtt_for_kill = 0
+canbus_for_kill = 0
+
+def go_down(sig, frame):
+	global mqtt_for_kill, canbus_for_kill
+	print('You pressed Ctrl+C!')
+	print("sig:", sig)
+	if args.discharge: 
+		DTU_switch_off(mqtt_for_kill, verbose=True)
+	if args.charge: 
+		if sig != CANBUS_NOT_OK:
+			MEANWELL_set_value(canbus_charger, 0)
+			MEANWELL_off(canbus_for_kill, verbose=True)
+		MEANWELL_disable(verbose=True)
+	mqtt_for_kill.disconnect()
+	if os.path.isfile("/home/markjoe/bin/.battery.lock"):
+		os.unlink("/home/markjoe/bin/.battery.lock")
+	sys.exit(0)
+
+DEBUG = False
+
+DTU_generation = 0
+DTU_is_valid = 0
+DTU = {}
+for u in DTUs: 
+	DTU[u] =  { 'reachable': 0, 'producing': 0, 'time':0, 'limit_absolute': 0.0 }
+
+BMS = { 'SOC': 0, 'time': 0, 'voltage': 0.0, 'current': 0.0 }
+
+P1_time = 0
+P1_production = 0
+P1_consumption = 0
+LAST_P1_PRODUCTION = 0
+LAST_P1_CONSUMPTION = 0
+LAST_P1_TIME = 0
+LAST_P1_TIME2 = 0  # for print output only
+
+LAST_MEANWELL_SET = 0
+SECONDS_NOT_IN_SYNC = 20
+
+GO_DOWN_COUNTER = 0
+
+BOILER_CHECK = 100
+BOILER_WAIT = 10
+BOILER_COUNTER = 0
+BOILER_COUNTER2 = 0
+
+CHARGED_FOR_TODAY = False
+DISCHARGED_FOR_TODAY = False
+new_value = 0
+
+# in the morning battery discharge ends when there is enough production
+# so sunrise_mod needs no intelligent tweeking
+# OR in case of empty battery, ends with sunrise
+
+# in the evening charging stops at sunset - 45 minutes
+# or at 18:00, whichever comes first
+
+sun = Sun(52, 5)
+# sunrise_mod=int(sun.get_sunrise_time().timestamp()) % 86400 + 900
+MORNING_SWITCH=int(sun.get_sunrise_time().timestamp()) % 86400 + 900
+# sunset_mod=int(sun.get_sunset_time().timestamp()) % 86400 - 2700
+EVENING_SWITCH=int(sun.get_sunset_time().timestamp()) % 86400 - 2700
+sunset_mod=int(sun.get_sunset_time().timestamp()) % 86400 
+(_,_,_,_,_,_,_,_,DST) = time.localtime()
+LT18h = 17 * 3600 - DST * 3600
+if LT18h < EVENING_SWITCH: EVENING_SWITCH = LT18h
+now_mod = int(time.time()) % 86400
+
+if args.sun:
+	args.discharge = False
+	args.charge = False
+	if now_mod < MORNING_SWITCH: args.discharge = True
+	if now_mod > MORNING_SWITCH and now_mod < EVENING_SWITCH: args.charge = True
+	if now_mod > EVENING_SWITCH: args.discharge = True
+
+def on_connect(client, userdata, flags, rc):
+	print("MQTT connected with result code "+str(rc))
+	# Subscribing in on_connect() means that if we lose the connection and
+	# reconnect then subscriptions will be renewed.
+	client.subscribe("p1monitor/smartmeter/#")
+	client.subscribe("JK-BMS/json")
+	client.subscribe("opendtu/dtu/status")
+	client.subscribe("opendtu/ac/power")
+	client.subscribe("opendtu/ac/is_valid")
+	for dtu in DTUs: 
+		client.subscribe("opendtu/%s/status/#" % dtu)
+#		client.subscribe("opendtu/%s/radio/rssi" % dtu)
+
+def on_message(client, userdata, msg):
+	global P1_time, P1_consumption, P1_production
+	global LAST_P1_PRODUCTION, LAST_P1_CONSUMPTION, LAST_P1_TIME
+	global DTU_generation, DTU_is_valid, DTU
+	global BMS
+	if DEBUG: print(msg.topic+" "+str(msg.payload))
+
+	if msg.topic == 'JK-BMS/json':
+		data = json.loads(msg.payload.decode())
+		BMS['SOC'] = data['soc']
+		BMS['time'] = data['epoch']
+		BMS['current'] = data['current']
+		BMS['voltage'] = data['voltage']
+	if msg.topic == 'p1monitor/smartmeter/timestamp_utc':
+		LAST_P1_TIME = P1_time
+		P1_time = int(msg.payload.decode())
+	if msg.topic == 'p1monitor/smartmeter/consumption_kw':
+		LAST_P1_CONSUMPTION = P1_consumption
+		P1_consumption = int(float(msg.payload.decode()) * 1000.0)
+	if msg.topic == 'p1monitor/smartmeter/production_kw':
+		LAST_P1_PRODUCTION = P1_production
+		P1_production = int(float(msg.payload.decode()) * 1000.0)
+
+# DTU STUFF
+	if msg.topic == 'opendtu/ac/is_valid':
+		DTU_is_valid = int(msg.payload.decode())
+	if msg.topic == 'opendtu/ac/power':
+		if DTU_is_valid==1:
+			DTU_generation = float(msg.payload.decode())
+		else:
+			DTU_generation = 0.0
+
+	for dtu in DTUs:
+		if msg.topic == 'opendtu/%s/status/reachable' % dtu:
+			DTU[dtu]['reachable'] = int(msg.payload.decode())
+		if msg.topic == 'opendtu/%s/status/producing' % dtu:
+			if DTU[dtu]['reachable'] == 1:
+				DTU[dtu]['producing'] = int(msg.payload.decode())
+			else:
+				DTU[dtu]['producing'] = 0
+		if msg.topic == 'opendtu/%s/status/last_update' % dtu:
+			if DTU[dtu]['reachable'] == 1:
+				DTU[dtu]['time'] = int(msg.payload.decode())
+			else:
+				DTU[dtu]['time'] = 0
+		if msg.topic == 'opendtu/%s/status/limit_absolute' % dtu:
+			if DTU[dtu]['reachable'] == 1:
+				DTU[dtu]['limit_absolute'] = float(msg.payload.decode())
+			else:
+				DTU[dtu]['limit_absolute'] = 0.0
+
+client = mqtt.Client()
+mqtt_for_kill = client  # for ctrl-c
+client.on_connect = on_connect
+client.on_message = on_message
+client.connect("mqtt", 1883, 60)
+
+if args.discharge: DTU_switch_on(client)
+
+if args.charge:
+	can.rc['interface'] = 'socketcan'
+	can.rc['channel'] = 'can0'
+	canbus_charger = can.Bus()
+	canbus_for_kill = canbus_charger
+	error = MEANWELL_check_comms(canbus_charger)
+	if error: 
+		print("CANBUS not working? Is charger actually on?")
+		go_down(CANBUS_NOT_OK, 0)
+	MEANWELL_enable(verbose=True) 
+	MEANWELL_set_voltage(canbus_charger, Vcharge)
+	MEANWELL_set_restart_voltage(canbus_charger, 54)
+# we set it on for clearing flags, this IS an assumption
+	MEANWELL_set_value(canbus_charger, 300, do_not_store=True)
+	time.sleep(1)
+	MEANWELL_set_value(canbus_charger, 0, do_not_store=True)
+	MEANWELL_off(canbus_charger) 
+	DTU_switch_off(client)
+
+signal.signal(signal.SIGINT, go_down)
+signal.signal(signal.SIGTERM, go_down)
+client.loop_start()
+time.sleep(20)  #  make sure all data is up to date
+
+while (True):
+	sys.stdout.flush()
+	time.sleep(1)
+	now = int(time.time())
+	now_mod = now % 86400
+
+	if args.discharge:
+# check DTU and inverters are running
+		if not DTU_is_valid: go_down(0,None)
+		if DTU[DTUs[0]]['reachable'] == 0: go_down(0,None)
+		if DTU[DTUs[1]]['reachable'] == 0: go_down(0,None)
+
+# check times
+	inverter1_time = DTU[DTUs[0]]['time']
+	inverter2_time = DTU[DTUs[1]]['time']
+	if abs(now - P1_time) > SECONDS_NOT_IN_SYNC: go_down(0,None)
+	if abs(now - BMS['time']) > SECONDS_NOT_IN_SYNC: go_down(0,None)
+	if args.discharge:
+		if abs(now - inverter1_time) > SECONDS_NOT_IN_SYNC: go_down(0,None)
+		if abs(now - inverter2_time) > SECONDS_NOT_IN_SYNC: go_down(0,None)
+
+	SOC = BMS['SOC']
+	BMS_voltage = BMS['voltage']
+	if (SOC < SOC_LOW or BMS_voltage < Vmin) and args.discharge:
+		if not DISCHARGED_FOR_TODAY:
+			print("SOC Battery too low or voltage too low", SOC, BMS_voltage)
+			DTU_set_value(client, 0)
+			DTU_switch_off(client, verbose=True)
+			DISCHARGED_FOR_TODAY = True
+	if DISCHARGED_FOR_TODAY:  # wait for sunrise
+		if now_mod > MORNING_SWITCH and now_mod < EVENING_SWITCH:
+			go_down(0,None)
+		else:
+			time.sleep(10)
+			continue
+	if BMS_voltage > Vcharge:
+		print("BMS voltage battery too high", BMS_voltage)
+		go_down(0,None)
+
+	if LAST_P1_TIME2 != P1_time:
+		LT = time.strftime("%Y-%m-%d %H:%M:%S",time.localtime())
+		print("P1_time", P1_time, LT, "prod:", P1_production, "cons:", P1_consumption)
+		print("BMS numbers: %d %4.1f %4.1f" % (SOC,BMS_voltage,BMS['current']))
+		LAST_P1_TIME2 = P1_time
+
+	if LAST_P1_TIME == P1_time: 
+#		print("no new P1 values")
+		continue
+
+	if (P1_consumption == LAST_P1_CONSUMPTION) and (P1_production == LAST_P1_PRODUCTION):
+#		print("P1: nothing changed")
+		continue
+
+
+	if args.discharge:
+		if P1_consumption > 10: # 'hier moet wat bij'
+			GO_DOWN_COUNTER = 0
+			if DTU[DTUs[0]]['limit_absolute'] > 499 and DTU[DTUs[1]]['limit_absolute'] > 499:
+				print("DTU at max, leaving as is")
+			else:
+				new_value = DTU[DTUs[0]]['limit_absolute'] + DTU[DTUs[1]]['limit_absolute'] + P1_consumption
+				if new_value > 1000: new_value=1000
+				DTU_set_value(client, new_value)
+		elif P1_production > 1  and  P1_consumption <= 2: # 'hier moet wat af'
+			if DTU[DTUs[0]]['limit_absolute'] > 0  or  DTU[DTUs[1]]['limit_absolute'] > 0:
+				GO_DOWN_COUNTER = 0
+				new_value = DTU[DTUs[0]]['limit_absolute'] + DTU[DTUs[1]]['limit_absolute'] - P1_production
+				if new_value < 0: new_value=0
+				DTU_set_value(client, new_value, react=True)
+			else: # production
+				print("Production time! go_down_counter:", GO_DOWN_COUNTER)
+				if DTU[DTUs[0]]['limit_absolute'] < 1  and  DTU[DTUs[1]]['limit_absolute'] < 1 and P1_production > 300:
+					DTU_set_value(client, 0)
+					if now_mod > EVENING_SWITCH and now_mod < sunset_mod: continue # time > 18h and before sunset
+					GO_DOWN_COUNTER = GO_DOWN_COUNTER + 1
+					if GO_DOWN_COUNTER > GO_DOWN_WAIT: go_down(0,0)
+				else:
+					GO_DOWN_COUNTER = 0
+		else: # precies goed
+			print("Last DTU setting", new_value)
+			pass
+
+	if args.charge:
+		if now_mod > EVENING_SWITCH and not args.force: 
+			print("Sunset, no charging anymore")
+			go_down(0,0)
+		if CHARGED_FOR_TODAY: 
+			time.sleep(10)
+			continue
+		if not args.quiet: MEANWELL_dump(canbus_charger)
+		CHG_STATUS = MEANWELL_get_field(canbus_charger, 0xb8)
+		IOUT = MEANWELL_get_field(canbus_charger, 0x61)
+		if CHG_STATUS == 1  and  IOUT < 0.2  and  BMS['current'] < 0.2:
+			print("Charging done, wait for sunset")
+			MEANWELL_set_value(canbus_charger, 0)
+			MEANWELL_off(canbus_charger, verbose=True)
+			MEANWELL_disable(verbose=True)
+			CHARGED_FOR_TODAY = True
+#			go_down(0,0)
+		print("BMS numbers: %d %4.1f %4.1f" % (SOC,BMS_voltage,BMS['current']))
+
+		net = int(P1_production - P1_consumption + LAST_MEANWELL_SET)
+		if args.safe: net = int(net * 0.9)
+
+		print("boiler", BOILER_COUNTER, BOILER_COUNTER2)
+#		if BOILER_COUNTER > BOILER_CHECK and BOILER_COUNTER2 < BOILER_WAIT:
+#			BOILER_COUNTER2 = BOILER_COUNTER2 + 1
+#			if BOILER_COUNTER2 > BOILER_WAIT:
+#				BOILER_COUNTER = 0
+#				BOILER_COUNTER2 = 0
+#			else:
+#				net = 0
+			
+		if args.force: net = 1400
+		if net < 300: # 60 * 5 
+			print("Low limit not reached (5A charging)")
+			LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, 0)
+#			MEANWELL_off(canbus_charger)
+			continue
+		LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, net)
+		LAST_POWER = MEANWELL_get_power(canbus_charger)
+		if LAST_MEANWELL_SET > 1399 and net < (1400+BOILER_WATT):
+			BOILER_COUNTER = BOILER_COUNTER + 1
+		else:
+			BOILER_COUNTER = 0
+			BOILER_COUNTER2 = 0
+
+		print("prod", P1_production, "cons", P1_consumption, "set", LAST_MEANWELL_SET, "net", net, "last_power", LAST_POWER)

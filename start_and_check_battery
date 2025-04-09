@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ -f /home/markjoe/bin/.battery.lock ]; then
+	echo "File lock exists"
+	exit
+fi
+
+ps -aux | grep battery-app | grep -v grep > /dev/null
+if [ $? -ne 0 ]; then
+  touch /home/markjoe/bin/.battery.lock
+  nohup /home/markjoe/bin/battery-app --sun < /dev/null > /run/user/1000/battery.log 2>&1 & disown
+fi
+
+
+# discharge stops at 300 Watt production
+# if > sunrise < sunset: --charge
