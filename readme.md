@@ -1,7 +1,7 @@
 just some notes:
 DIY Battery with MeanWell NPB (NPB-1700-48) charger, two Hoymiles HMS-500 as inverters, and JK B2A20S20PR-HC BMS, and 16 EVE 280Ah cells.
 
-<a><img src="20250111_191525.jpg" align="middle" width="100%"></a>
+<a><img src="20250211_191525.jpg" align="middle" width="50%"></a>
 
 MeanWell NPB (NPB-1700-48) for my DIY home battery to be steered by CAN-BUS. 
 **COMMANDS HAVE TO BE SENT WITH SWAPPED LOW AND HIGH BYTES**, thus reading from the manual e.g. set system_config 
