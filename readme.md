@@ -26,6 +26,10 @@ Choose the CURVE_CV to your liking, I use 55.5V, 3.47 per cell.
 
 Note from the manual: 2. **The setting of charging related parameters requires AC
 power on, remote on/off, or communication operation on/off before it can take effect, not immediately.**
+This holds if using the charger in **charger** mode. You are able to charge the batteries also in **PSU mode**.
+In the **PSU mode** case, changes to the settings (voltage/current) are **immediate**. Realize however that **you** are
+responsible for monitoring voltages and currents and making sure that charching is done correct and also safe.
+In **charger** mode things are much more automated by the charger.
 
 And, oh yeah, the search term for the connector on the MeanWell NPB: JST PHDR-14VS (I bought these: 
 https://nl.aliexpress.com/item/1005005295218531.html?spm=a2g0o.order_list.order_list_main.29.21ef79d2HRHRib&gatewayAdapt=glo2nld
