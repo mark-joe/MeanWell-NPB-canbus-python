@@ -1,7 +1,9 @@
 just some notes:
 DIY Battery with MeanWell NPB (NPB-1700-48) charger, two Hoymiles HMS-500 as inverters, and JK B2A20S20PR-HC BMS, and 16 EVE 280Ah cells.
 
+<center>
 <a><img src="20250211_191525.jpg" align="center" width="50%"></a>
+</center>
 
 MeanWell NPB (NPB-1700-48) for my DIY home battery to be steered by CAN-BUS. 
 **COMMANDS HAVE TO BE SENT WITH SWAPPED LOW AND HIGH BYTES**, thus reading from the manual e.g. set system_config 
@@ -39,6 +41,8 @@ You get 5 pieces with connectors on both sites, enough to connect 10 chargers!
 
 **Raspberry settings**
 
+```python
+
 /boot/firmware/config.txt  
 dtparam=spi=on
 dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=25
@@ -56,6 +60,7 @@ up /sbin/ifconfig can0 up
 up /sbin/ifconfig can1 up
 down /sbin/ifconfig can0 down
 down /sbin/ifconfig can1 down
+```
 
 sudo apt install python3-can  
 
