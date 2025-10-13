@@ -1,0 +1,122 @@
+#!/usr/bin/env python
+import can
+import time
+import sys
+import paho.mqtt.client as mqtt
+import json
+import collections
+import socket
+import datetime
+
+def get_datetime():
+# subtle diff with mircopython: DST in missing
+	year, month, day, hour, mins, secs, weekday, yearday, dst = time.localtime()
+	date = "%d-%02d-%02d" % (year, month, day)
+	tme = "%02d:%02d:%02d" % (hour, mins, secs)
+	return (date,tme)
+
+DEBUG = True
+DEBUG = False
+THIN_OUT_FACTOR = 10  # messages are there every 100ms!!
+MQTT_INTERVAL = 5 # seconds
+
+if DEBUG:
+	THIN_OUT_FACTOR = 10
+	MQTT_INTERVAL = 2
+
+# see https://python-can.readthedocs.io/en/stable
+
+can.rc['interface'] = 'socketcan'
+can.rc['channel'] = 'can1'
+
+filters = [ {"can_id": 0x02f4, "can_mask": 0xffff, "extended": False},
+            {"can_id": 0x04f4, "can_mask": 0xffff, "extended": False},
+            {"can_id": 0x07f4, "can_mask": 0xffff, "extended": False}]
+
+host = socket.gethostname()
+client = mqtt.Client("BMS_at_"+host)
+client.connect("mqtt", 1883, 60) # protocol=mqtt.MQTTv311)  paha versie 1/2
+dic = collections.OrderedDict()
+dic['epoch']=0
+dic['timestamp']=0
+dic['voltage']=-999.9
+dic['current']=-999.9
+dic['soc']=0
+dic['discharge_time']=0
+dic['vmax']=-999.9
+dic['vmin']=-999.9
+dic['vdiff']=-999.9
+dic['alarms']=0x00000000
+dic['alarms_hex']="0x00000000"
+
+with can.Bus() as bus:
+	bus.set_filters(filters)
+
+	Counter_0x02f4 = 0
+	Counter_0x04f4 = 0
+	Last_MQTT = int(time.time()) + 5  # wait few seconds
+	ALARM = False
+
+	while (True):
+		try:
+			msg = bus.recv(1)  # blocking read! with 1 second timeout
+			if msg == None:
+				print("nothing received")
+				exit(0)
+
+			if msg.arbitration_id == 0x07f4:  # NOT TESTED AS NO ERRORS OCCURED
+				a = msg.data[0] + msg.data[1] * 256 + msg.data[2] * 256 * 256 + \
+                    msg.data[3] * 256 * 256 * 256
+				ah = "0x%08x"%a
+				dic['alarms'] = a
+				dic['alarms_hex'] = ah
+				if a>0: ALARM = True
+				print(msg)
+				sys.stdout.flush() 
+
+			now = msg.timestamp
+			if (now > Last_MQTT + MQTT_INTERVAL)  or  ALARM:
+				dic['epoch']=int(now)
+				(d,t) = get_datetime()
+				dic['timestamp'] = d + ' ' + t + " (localtime)"
+				json_data = json.dumps(dic,indent=4)
+				ret = client.publish("JK-BMS/json",json_data)
+				ret = client.publish("JK-BMS/SOC", dic['soc'])
+				ret = client.publish("JK-BMS/voltage", dic['voltage'])
+				ret = client.publish("JK-BMS/current", dic['current'])
+				ret = client.publish("JK-BMS/vdiff", dic['vdiff'])
+				Last_MQTT = now
+				ALARM = False
+
+			if msg.arbitration_id == 0x02f4:
+				Counter_0x02f4 = Counter_0x02f4 + 1
+				if Counter_0x02f4 % THIN_OUT_FACTOR != 0: continue
+#				print(msg)
+				voltage = float(msg.data[0]) * 0.1 + float(msg.data[1]) * 0.1 * 256.0
+				dic['voltage'] = round(voltage,1)
+				current = float(msg.data[2]) * 0.1 + float(msg.data[3]) * 0.1 * 256.0
+				current = current - 400
+				dic['current'] = round(current,1)
+				soc = int(msg.data[4])
+				dic['soc'] = soc
+				discharge_time = int(msg.data[6]) + int(msg.data[7]) * 256
+				dic['discharge_time'] = discharge_time
+				if DEBUG: print(msg.timestamp, voltage, current, soc, discharge_timing)
+				sys.stdout.flush() 
+			if msg.arbitration_id == 0x04f4:
+				Counter_0x04f4 = Counter_0x04f4 + 1
+				if Counter_0x04f4 % THIN_OUT_FACTOR != 0: continue
+				Vmax = float(msg.data[0] + msg.data[1] * 256) / 1000.0
+				dic['vmax'] = Vmax
+				Cellmax = int(msg.data[2])
+				Vmin = float(msg.data[3] + msg.data[4] * 256) / 1000.0
+				dic['vmin'] = Vmin
+				dic['vdiff'] = abs(int(msg.data[0] + msg.data[1] * 256 - msg.data[3] - msg.data[4] * 256))
+				Cellmin = int(msg.data[5])
+				if DEBUG: print("%4.3f"%Vmin,Cellmin,"%4.3f"%Vmax,Cellmax)
+				sys.stdout.flush() 
+		except can.CanError:
+			print("CAN read error")
+			exit(0)
+
+client.disconnect()
