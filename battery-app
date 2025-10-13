@@ -20,7 +20,7 @@ parser.add_argument('--charge', action='store_true')
 parser.add_argument('--force', action='store_true')
 parser.add_argument('--discharge', action='store_true')
 parser.add_argument('--sun', action='store_true')
-parser.add_argument('--quiet','-q', action='store_true')
+# parser.add_argument('--quiet','-q', action='store_true')
 parser.add_argument('--safe', action='store_true')
 args = parser.parse_args()
 if args.charge and args.discharge:
@@ -177,7 +177,9 @@ client.on_connect = on_connect
 client.on_message = on_message
 client.connect("mqtt", 1883, 60)
 
-if args.discharge: DTU_switch_on(client)
+if args.discharge: 
+	DTU_restart(client)  # switches on, and clears daily yield
+#	DTU_switch_on(client)
 
 if args.charge:
 	can.rc['interface'] = 'socketcan'
@@ -232,10 +234,11 @@ while (True):
 			DTU_set_value(client, 0)
 			DTU_switch_off(client, verbose=True)
 			DISCHARGED_FOR_TODAY = True
-	if DISCHARGED_FOR_TODAY:  # wait for sunrise
-		if now_mod > MORNING_SWITCH and now_mod < EVENING_SWITCH:
+	if DISCHARGED_FOR_TODAY:  # wait for sunrise + 5 minutes! otherwise restart same
+		if now_mod > MORNING_SWITCH + 300 and now_mod < EVENING_SWITCH:
 			go_down(0,None)
 		else:
+			print("Empty battery, waiting for the sun")
 			time.sleep(10)
 			continue
 	if BMS_voltage > Vcharge:
@@ -248,14 +251,16 @@ while (True):
 		print("BMS numbers: %d %4.1f %4.1f" % (SOC,BMS_voltage,BMS['current']))
 		LAST_P1_TIME2 = P1_time
 
-	if LAST_P1_TIME == P1_time: 
+	if args.verbose: 
+		print("now, P1_time, LAST_P1_TIME", now, P1_time, LAST_P1_TIME)
+
+#	if LAST_P1_TIME == P1_time:  # smart ass, this is NEVER true!
 #		print("no new P1 values")
-		continue
+#		continue
 
 	if (P1_consumption == LAST_P1_CONSUMPTION) and (P1_production == LAST_P1_PRODUCTION):
-#		print("P1: nothing changed")
+		print("P1 values: nothing changed")   # well things can have changed, DTU or BMS or MeanWell
 		continue
-
 
 	if args.discharge:
 		if P1_consumption > 10: # 'hier moet wat bij'
@@ -276,23 +281,24 @@ while (True):
 				print("Production time! go_down_counter:", GO_DOWN_COUNTER)
 				if DTU[DTUs[0]]['limit_absolute'] < 1  and  DTU[DTUs[1]]['limit_absolute'] < 1 and P1_production > 300:
 					DTU_set_value(client, 0)
-					if now_mod > EVENING_SWITCH and now_mod < sunset_mod: continue # time > 18h and before sunset
+#					if now_mod > EVENING_SWITCH and now_mod < sunset_mod: continue # time > 18h and before sunset
+					if now_mod > EVENING_SWITCH: continue 
 					GO_DOWN_COUNTER = GO_DOWN_COUNTER + 1
 					if GO_DOWN_COUNTER > GO_DOWN_WAIT: go_down(0,0)
 				else:
 					GO_DOWN_COUNTER = 0
 		else: # precies goed
-			print("Last DTU setting", new_value)
+			print("Last DTU setting", DTU[DTUs[0]]['limit_absolute'] + DTU[DTUs[1]]['limit_absolute'])
 			pass
 
 	if args.charge:
-		if now_mod > EVENING_SWITCH and not args.force: 
+		if now_mod > EVENING_SWITCH + 300 and not args.force: 
 			print("Sunset, no charging anymore")
 			go_down(0,0)
 		if CHARGED_FOR_TODAY: 
 			time.sleep(10)
 			continue
-		if not args.quiet: MEANWELL_dump(canbus_charger)
+#		if args.verbose: MEANWELL_dump(canbus_charger)
 		CHG_STATUS = MEANWELL_get_field(canbus_charger, 0xb8)
 		IOUT = MEANWELL_get_field(canbus_charger, 0x61)
 		if CHG_STATUS == 1  and  IOUT < 0.2  and  BMS['current'] < 0.2:
@@ -307,7 +313,7 @@ while (True):
 		net = int(P1_production - P1_consumption + LAST_MEANWELL_SET)
 		if args.safe: net = int(net * 0.9)
 
-		print("boiler", BOILER_COUNTER, BOILER_COUNTER2)
+#		print("boiler", BOILER_COUNTER, BOILER_COUNTER2)
 #		if BOILER_COUNTER > BOILER_CHECK and BOILER_COUNTER2 < BOILER_WAIT:
 #			BOILER_COUNTER2 = BOILER_COUNTER2 + 1
 #			if BOILER_COUNTER2 > BOILER_WAIT:
@@ -319,12 +325,12 @@ while (True):
 		if args.force: net = 1400
 		if net < 300: # 60 * 5 
 			print("Low limit not reached (5A charging)")
-			LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, 0)
-#			MEANWELL_off(canbus_charger)
+			if LAST_MEANWELL_SET > 0:
+				LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, 0)
 			continue
 		LAST_MEANWELL_SET = MEANWELL_set_value(canbus_charger, net)
 		LAST_POWER = MEANWELL_get_power(canbus_charger)
-		if LAST_MEANWELL_SET > 1399 and net < (1400+BOILER_WATT):
+		if LAST_MEANWELL_SET > 1399 and net < (1400+BOILER_WATT): # means there is not enough for both battery and boiler
 			BOILER_COUNTER = BOILER_COUNTER + 1
 		else:
 			BOILER_COUNTER = 0
