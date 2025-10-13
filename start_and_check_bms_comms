@@ -1,0 +1,6 @@
+#!/bin/bash
+
+ps -aux | grep bms2mqtt | grep -v grep > /dev/null
+if [ $? -ne 0 ]; then
+  nohup /home/markjoe/bin/bms2mqtt < /dev/null &> /home/markjoe/bin/logs/bms2mqtt_$(date -d "today" +"%Y%m%d-%H%M").log & disown
+fi

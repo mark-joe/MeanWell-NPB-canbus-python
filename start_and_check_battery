@@ -1,14 +1,17 @@
 #!/bin/bash
 
 if [ -f /home/markjoe/bin/.battery.lock ]; then
-	echo "File lock exists"
+#	echo "File lock exists"
 	exit
 fi
 
 ps -aux | grep battery-app | grep -v grep > /dev/null
 if [ $? -ne 0 ]; then
-  touch /home/markjoe/bin/.battery.lock
-  nohup /home/markjoe/bin/battery-app --sun < /dev/null > /run/user/1000/battery.log 2>&1 & disown
+	touch /home/markjoe/bin/.battery.lock
+	if [ -f /run/user/1000/battery.log ]; then
+		mv /run/user/1000/battery.log /run/user/1000/battery.log.1
+	fi
+	nohup /home/markjoe/bin/battery-app --sun < /dev/null > /run/user/1000/battery.log 2>&1 & disown
 fi
 
 

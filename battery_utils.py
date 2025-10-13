@@ -34,6 +34,17 @@ def DTU_switch_on(client, verbose=False):
 		ret = client.publish(topic,0)
 	time.sleep(5)
 
+def DTU_restart(client, verbose=False):
+	if verbose: print("RESTART INVERTERS")
+	for dtu in range(len(DTUs)):
+		topic2 = 'opendtu/%s/cmd/restart' % DTUs[dtu]
+		ret = client.publish(topic2,1)
+	time.sleep(5)
+	for dtu in range(len(DTUs)):
+		topic = 'opendtu/%s/cmd/limit_nonpersistent_absolute' % DTUs[dtu]
+		ret = client.publish(topic,0)
+	time.sleep(5)
+
 def DTU_set_value(client, in_value, react=False):
 	global DTU_LAST_SET_VALUE, DTU_AVG_SET_N, DTU_AVG_SET_VALUE, TODAY_DTU
 
