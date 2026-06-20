@@ -1,4 +1,4 @@
-just some notes:
+just some notes, this is not a compete project you can just adopt. You however can find some routines to interface with the devices bing used.
 DIY Battery with MeanWell NPB (NPB-1700-48) charger, two Hoymiles HMS-500 as inverters, and JK B2A20S20PR-HC BMS, and 16 EVE 280Ah cells.
 
 <center>
